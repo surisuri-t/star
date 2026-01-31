@@ -10,6 +10,13 @@ const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.LOBBY);
   const [currentLevel, setCurrentLevel] = useState(0);
   const [userStars, setUserStars] = useState<number[]>([]);
+  const [wrongClicks, setWrongClicks] = useState(0);
+  
+  // 힌트 관련 상태
+  const [hintsUsed, setHintsUsed] = useState(0); // 사용한 힌트 개수 (최대 3)
+  const [activeHintId, setActiveHintId] = useState<number | null>(null); // 현재 깜빡이고 있는 힌트 별 ID
+  const [hintCooldown, setHintCooldown] = useState(0); // 남은 쿨다운 시간(초)
+
   const [showShootingStar, setShowShootingStar] = useState(false);
   const [geminiFeedback, setGeminiFeedback] = useState<string>("");
   const [loadingFeedback, setLoadingFeedback] = useState(false);
@@ -96,12 +103,20 @@ const App: React.FC = () => {
   const startGame = () => {
     setGameState(GameState.OBSERVE);
     setUserStars([]);
+    setWrongClicks(0);
+    setHintsUsed(0);
+    setActiveHintId(null);
+    setHintCooldown(0);
     setGeminiFeedback("");
   };
 
   const retryLevel = () => {
     setGameState(GameState.OBSERVE);
     setUserStars([]);
+    setWrongClicks(0);
+    setHintsUsed(0);
+    setActiveHintId(null);
+    setHintCooldown(0);
     setGeminiFeedback("");
   };
 
@@ -109,7 +124,24 @@ const App: React.FC = () => {
     setCurrentLevel(prev => prev + 1);
     setGameState(GameState.OBSERVE);
     setUserStars([]);
+    setWrongClicks(0);
+    setHintsUsed(0);
+    setActiveHintId(null);
+    setHintCooldown(0);
     setGeminiFeedback("");
+  };
+
+  const prevLevel = () => {
+    if (currentLevel > 0) {
+      setCurrentLevel(prev => prev - 1);
+      setGameState(GameState.OBSERVE);
+      setUserStars([]);
+      setWrongClicks(0);
+      setHintsUsed(0);
+      setActiveHintId(null);
+      setHintCooldown(0);
+      setGeminiFeedback("");
+    }
   };
 
   const goToDraw = () => {
@@ -119,10 +151,45 @@ const App: React.FC = () => {
 
   const toggleStar = (id: number) => {
     if (gameState !== GameState.DRAW) return;
+    
+    // 만약 현재 힌트로 활성화된 별을 클릭했다면 힌트 비활성화
+    if (id === activeHintId) {
+      setActiveHintId(null);
+    }
+
+    const isCorrect = constellation.stars.some(s => s.id === id);
+    if (!isCorrect && !userStars.includes(id)) {
+      setWrongClicks(prev => prev + 1);
+    }
+
     setUserStars(prev => 
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     );
   };
+
+  const useHint = () => {
+    if (hintsUsed >= 3 || hintCooldown > 0 || gameState !== GameState.DRAW) return;
+    
+    // 아직 선택하지 않은 정답 별 중 하나를 찾아 힌트로 지정
+    const firstUnselected = constellation.stars.find(s => !userStars.includes(s.id));
+    
+    if (firstUnselected) {
+      setActiveHintId(firstUnselected.id);
+      setHintsUsed(prev => prev + 1);
+      setHintCooldown(30);
+    }
+  };
+
+  // 힌트 쿨다운 타이머
+  useEffect(() => {
+    let timer: any;
+    if (hintCooldown > 0) {
+      timer = setInterval(() => {
+        setHintCooldown(prev => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [hintCooldown]);
 
   const checkResult = () => {
     const requiredStarIds = constellation.stars.map(s => s.id);
@@ -152,6 +219,20 @@ const App: React.FC = () => {
     }
   };
 
+  const goHome = () => {
+    if (window.confirm("정말로 로비로 돌아갈까요? 모든 게임 진행 상황과 점수가 초기화됩니다.")) {
+      setGameState(GameState.LOBBY);
+      setCurrentLevel(0);
+      setTotalScore(0);
+      setUserStars([]);
+      setWrongClicks(0);
+      setHintsUsed(0);
+      setActiveHintId(null);
+      setHintCooldown(0);
+      setGeminiFeedback("");
+    }
+  };
+
   useEffect(() => {
     if (gameState === GameState.OBSERVE) {
       const timer = setTimeout(() => goToDraw(), 5000);
@@ -159,18 +240,23 @@ const App: React.FC = () => {
     }
   }, [gameState]);
 
+  const gridLines = useMemo(() => {
+    const lines = [];
+    for (let i = 1; i < 10; i++) {
+      lines.push(i * 10);
+    }
+    return lines;
+  }, []);
+
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-center p-4">
       <StarBackground isSuccess={gameState === GameState.SUCCESS} />
       {showShootingStar && <ShootingStar />}
 
-      {/* Main UI Overlay */}
       <div className="z-10 w-full max-w-2xl bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[3rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-hidden">
         
-        {/* LOBBY */}
         {gameState === GameState.LOBBY && (
           <div className="text-center py-6 animate-fade-in">
-            {/* Constellation Illustration */}
             <div className="mb-8 flex justify-center">
               <div className="relative w-32 h-32 animate-pulse-slow">
                 <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
@@ -204,7 +290,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* RANKING */}
         {gameState === GameState.RANKING && (
           <div className="animate-fade-in">
             <div className="flex justify-between items-center mb-10">
@@ -228,7 +313,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ENCYCLOPEDIA */}
         {gameState === GameState.ENCYCLOPEDIA && (
           <div className="max-h-[75vh] overflow-y-auto pr-2 custom-scrollbar animate-fade-in">
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-[#0a1022]/90 backdrop-blur-xl p-5 -mx-4 rounded-t-3xl z-20">
@@ -259,22 +343,96 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* GAMEPLAY */}
         {(gameState === GameState.OBSERVE || gameState === GameState.DRAW || gameState === GameState.SUCCESS || gameState === GameState.FAILURE) && (
           <div className="flex flex-col items-center animate-fade-in">
             <div className="mb-6 flex justify-between w-full items-end border-b border-white/10 pb-4">
-              <div>
-                <span className="text-xs font-quicksand text-blue-400 tracking-[0.2em] mb-1 block">STAGE {currentLevel + 1}</span>
-                <h2 className="text-4xl font-gamja">{constellation.koreanName}</h2>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={goHome}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all group"
+                  title="로비로 돌아가기 (완전 초기화)"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/50 group-hover:text-blue-300 transition-colors">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                  </svg>
+                </button>
+                <button 
+                  onClick={prevLevel}
+                  disabled={currentLevel === 0}
+                  className={`p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all group ${currentLevel === 0 ? 'opacity-20 cursor-not-allowed' : ''}`}
+                  title="이전 여행"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/50 group-hover:text-blue-300 transition-colors">
+                    <path d="m15 18-6-6 6-6"></path>
+                  </svg>
+                </button>
+                <div>
+                  <span className="text-xs font-quicksand text-blue-400 tracking-[0.2em] mb-1 block">STAGE {currentLevel + 1} / {CONSTELLATIONS.length}</span>
+                  <h2 className="text-3xl font-gamja">{constellation.koreanName}</h2>
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-xl font-gamja text-yellow-300 drop-shadow-sm">{totalScore.toLocaleString()}</div>
-                <div className="text-[0.6rem] text-white/30 uppercase tracking-widest font-quicksand">Stars Collected</div>
+                <div className="text-[0.6rem] text-white/30 uppercase tracking-widest font-quicksand">Total Points</div>
               </div>
             </div>
 
-            <div className="relative w-full aspect-square bg-[#000000]/50 rounded-[2.5rem] border border-white/10 overflow-hidden shadow-inner">
+            {(gameState === GameState.DRAW) && (
+              <div className="w-full flex justify-between items-center mb-4 px-2">
+                <div className={`px-6 py-2 rounded-full border transition-all duration-300 font-gamja text-lg flex items-center gap-3 ${
+                  userStars.length === constellation.stars.length 
+                    ? 'bg-blue-500/20 border-blue-400 text-blue-200 shadow-[0_0_15px_rgba(96,165,250,0.3)]' 
+                    : 'bg-white/5 border-white/10 text-white/60'
+                }`}>
+                  <span className="text-sm font-quicksand tracking-widest text-white/40 uppercase">Selected</span>
+                  <span className={`text-2xl ${userStars.length > constellation.stars.length ? 'text-red-400' : ''}`}>
+                    {userStars.length}
+                  </span>
+                  <span className="text-white/20">/</span>
+                  <span className="text-xl">{constellation.stars.length}</span>
+                </div>
+
+                <button 
+                  onClick={useHint}
+                  disabled={hintsUsed >= 3 || hintCooldown > 0}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full border font-gamja text-lg transition-all active:scale-95 ${
+                    hintsUsed >= 3 
+                      ? 'bg-white/5 border-white/5 text-white/20 cursor-not-allowed' 
+                      : hintCooldown > 0
+                        ? 'bg-cyan-500/5 border-cyan-500/10 text-cyan-500/40 cursor-wait'
+                        : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]'
+                  }`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path>
+                    <path d="M9 18h6"></path>
+                    <path d="M10 22h4"></path>
+                  </svg>
+                  {hintsUsed >= 3 ? '힌트 소진' : hintCooldown > 0 ? `대기 (${hintCooldown}s)` : `힌트 (${3 - hintsUsed}/3)`}
+                </button>
+              </div>
+            )}
+
+            <div className="relative w-full aspect-square bg-[#000000]/50 rounded-[2.5rem] border border-white/10 overflow-hidden shadow-inner group/canvas">
               <svg viewBox="0 0 100 100" className="w-full h-full p-8">
+                <g className="grid-layer pointer-events-none transition-opacity duration-500 opacity-20 group-hover/canvas:opacity-40">
+                  {gridLines.map(pos => (
+                    <React.Fragment key={pos}>
+                      <line 
+                        x1={pos} y1="0" x2={pos} y2="100" 
+                        stroke="white" strokeWidth={pos === 50 ? "0.3" : "0.1"} 
+                        strokeDasharray={pos === 50 ? "" : "2 2"} 
+                      />
+                      <line 
+                        x1="0" y1={pos} x2="100" y2={pos} 
+                        stroke="white" strokeWidth={pos === 50 ? "0.3" : "0.1"} 
+                        strokeDasharray={pos === 50 ? "" : "2 2"} 
+                      />
+                    </React.Fragment>
+                  ))}
+                </g>
+
                 {(gameState === GameState.OBSERVE || gameState === GameState.SUCCESS || gameState === GameState.FAILURE) && constellation.connections.map(([id1, id2], idx) => {
                   const s1 = constellation.stars.find(s => s.id === id1)!;
                   const s2 = constellation.stars.find(s => s.id === id2)!;
@@ -292,6 +450,9 @@ const App: React.FC = () => {
 
                 {(gameState === GameState.DRAW ? [...constellation.stars, ...decoys] : constellation.stars).map((star) => {
                   const isSelected = userStars.includes(star.id);
+                  // 현재 활성화된 딱 하나의 힌트 별만 깜빡임
+                  const isHinting = activeHintId === star.id;
+                  
                   return (
                     <g key={star.id} onClick={() => toggleStar(star.id)} className="cursor-pointer group">
                       <circle cx={star.x} cy={star.y} r="5" className="fill-white/0 group-hover:fill-white/5" />
@@ -302,11 +463,13 @@ const App: React.FC = () => {
                             ? "fill-white animate-pulse" 
                             : isSelected 
                               ? "fill-yellow-200 drop-shadow-[0_0_12px_rgba(253,224,71,0.9)] scale-125 transform" 
-                              : "fill-white/30 group-hover:fill-white/60"
+                              : isHinting 
+                                ? "fill-cyan-400 animate-hint-pulse drop-shadow-[0_0_15px_rgba(34,211,238,0.8)]"
+                                : "fill-white/30 group-hover:fill-white/60"
                         }`}
                         style={{ transformOrigin: `${star.x}px ${star.y}px` }}
                       />
-                      <circle cx={star.x} cy={star.y} r="8" fill="transparent" />
+                      <circle cx={star.x} cy={star.y} r="3.5" fill="transparent" />
                     </g>
                   );
                 })}
@@ -319,33 +482,58 @@ const App: React.FC = () => {
                    </div>
                 </div>
               )}
+
+              {gameState === GameState.DRAW && activeHintId !== null && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none">
+                   <div className="px-4 py-1.5 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-[10px] font-quicksand text-cyan-300 uppercase tracking-widest animate-fade-in flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                     Single Star Guide Active
+                   </div>
+                </div>
+              )}
             </div>
 
             {gameState === GameState.DRAW && (
               <div className="mt-8 flex gap-4 w-full">
                 <button 
                   onClick={checkResult} 
-                  className="flex-1 py-5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 rounded-[1.5rem] font-gamja text-2xl shadow-xl transition-all active:scale-95"
+                  className={`flex-1 py-5 rounded-[1.5rem] font-gamja text-2xl shadow-xl transition-all active:scale-95 ${
+                    userStars.length === constellation.stars.length
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 text-white'
+                    : 'bg-white/10 text-white/40 border border-white/10'
+                  }`}
                 >
-                  기억을 새겨요
+                  별자리를 그려봐요
                 </button>
                 <button 
-                  onClick={() => setUserStars([])} 
+                  onClick={() => {
+                    setUserStars([]);
+                    setWrongClicks(0);
+                    setHintsUsed(0);
+                    setActiveHintId(null);
+                    setHintCooldown(0);
+                  }} 
                   className="px-8 py-5 bg-white/5 hover:bg-white/10 rounded-[1.5rem] font-gamja text-xl border border-white/10 transition-all text-white/50"
                 >
-                  지우기
+                  다시하기
                 </button>
               </div>
             )}
 
             {(gameState === GameState.SUCCESS || gameState === GameState.FAILURE) && (
-              <div className="mt-8 w-full animate-fade-in">
+              <div className="mt-8 w-full animate-fade-in max-h-[40vh] overflow-y-auto custom-scrollbar">
                 <div className={`p-6 rounded-[2rem] mb-6 border backdrop-blur-md ${gameState === GameState.SUCCESS ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
-                   <h4 className={`text-2xl font-gamja mb-2 ${gameState === GameState.SUCCESS ? 'text-green-300' : 'text-red-300'}`}>
-                     {gameState === GameState.SUCCESS ? '✨ 아름답게 성공했어요!' : '☄️ 별자리가 흩어졌네요'}
+                   <h4 className={`text-2xl font-gamja mb-3 ${gameState === GameState.SUCCESS ? 'text-green-300' : 'text-red-300'}`}>
+                     {gameState === GameState.SUCCESS ? '✨ 성공을 축하해요!' : '☄️ 별자리가 흩어졌네요'}
                    </h4>
-                   <p className="text-white/80 text-sm font-light leading-relaxed">
-                     {loadingFeedback ? "별의 요정이 속삭이는 중..." : geminiFeedback}
+                   
+                   <div className="space-y-4 text-white/80 text-sm leading-relaxed mb-4 border-b border-white/10 pb-4">
+                     <p className="font-semibold text-blue-200">"{constellation.description}"</p>
+                     <p className="opacity-70 italic">{constellation.myth}</p>
+                   </div>
+
+                   <p className="text-white/90 text-sm font-gamja leading-relaxed text-base">
+                     {loadingFeedback ? "별의 요정이 다정한 말을 준비 중..." : geminiFeedback}
                    </p>
                 </div>
                 
@@ -356,22 +544,17 @@ const App: React.FC = () => {
                   >
                     다시 하기
                   </button>
-                  {gameState === GameState.SUCCESS && (
-                    <button 
-                      onClick={nextLevel} 
-                      className="flex-1 py-4 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl shadow-lg font-gamja text-xl transition-all transform hover:scale-105"
-                    >
-                      다음 여행
-                    </button>
-                  )}
+                  <button 
+                    onClick={nextLevel} 
+                    className={`flex-1 py-4 rounded-2xl shadow-lg font-gamja text-xl transition-all transform hover:scale-105 ${
+                      gameState === GameState.SUCCESS 
+                      ? 'bg-gradient-to-r from-blue-400 to-indigo-400' 
+                      : 'bg-white/10 text-white/60 border border-white/10'
+                    }`}
+                  >
+                    다음 여행
+                  </button>
                 </div>
-                
-                <button 
-                  onClick={() => setGameState(GameState.LOBBY)}
-                  className="w-full mt-6 py-2 text-xs text-white/20 hover:text-white/50 transition-colors uppercase tracking-widest font-quicksand"
-                >
-                  GALAXY LOBBY
-                </button>
               </div>
             )}
           </div>
@@ -386,6 +569,11 @@ const App: React.FC = () => {
         .animate-fade-in { animation: fade-in 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         @keyframes pulse-slow { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } }
         .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+        @keyframes hint-pulse { 
+          0%, 100% { transform: scale(1); opacity: 0.5; } 
+          50% { transform: scale(1.4); opacity: 1; } 
+        }
+        .animate-hint-pulse { animation: hint-pulse 1.5s ease-in-out infinite; }
       `}</style>
     </div>
   );
