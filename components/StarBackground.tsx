@@ -9,12 +9,12 @@ const StarBackground: React.FC<StarBackgroundProps> = ({ isSuccess }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const stars = useMemo(() => {
-    return Array.from({ length: 300 }).map(() => ({
+    return Array.from({ length: 400 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: Math.random() * 1.5 + 0.2,
-      twinkleSpeed: Math.random() * 0.05 + 0.01,
-      color: Math.random() > 0.8 ? '#cbd5e1' : '#ffffff', // Mix of white and slightly blue stars
+      size: Math.random() * 1.8 + 0.2,
+      twinkleSpeed: Math.random() * 0.04 + 0.005,
+      color: Math.random() > 0.8 ? '#cbd5e1' : (Math.random() > 0.9 ? '#fff7ed' : '#ffffff'),
       phase: Math.random() * Math.PI * 2
     }));
   }, []);
@@ -32,27 +32,34 @@ const StarBackground: React.FC<StarBackgroundProps> = ({ isSuccess }) => {
       canvas.height = window.innerHeight;
 
       // 1. Deep Space Background
-      const bgGrad = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, canvas.width
-      );
-      bgGrad.addColorStop(0, '#0f172a');
-      bgGrad.addColorStop(1, '#020617');
-      ctx.fillStyle = bgGrad;
+      ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 2. Milky Way Nebulous Glow
+      // 2. Milky Way / Nebula Layers
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
-      const nebulaGrad = ctx.createRadialGradient(
-        canvas.width * 0.5, canvas.height * 0.5, 0,
-        canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.8
+      
+      // Indigo core
+      const nebulaGrad1 = ctx.createRadialGradient(
+        canvas.width * 0.6, canvas.height * 0.4, 0,
+        canvas.width * 0.6, canvas.height * 0.4, canvas.width * 0.9
       );
-      nebulaGrad.addColorStop(0, 'rgba(67, 56, 202, 0.15)'); // Indigo
-      nebulaGrad.addColorStop(0.5, 'rgba(126, 34, 206, 0.05)'); // Purple
-      nebulaGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = nebulaGrad;
+      nebulaGrad1.addColorStop(0, 'rgba(49, 46, 129, 0.2)');
+      nebulaGrad1.addColorStop(0.5, 'rgba(67, 56, 202, 0.08)');
+      nebulaGrad1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = nebulaGrad1;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Purple highlights
+      const nebulaGrad2 = ctx.createRadialGradient(
+        canvas.width * 0.3, canvas.height * 0.7, 0,
+        canvas.width * 0.3, canvas.height * 0.7, canvas.width * 0.6
+      );
+      nebulaGrad2.addColorStop(0, 'rgba(126, 34, 206, 0.12)');
+      nebulaGrad2.addColorStop(0.6, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = nebulaGrad2;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       ctx.restore();
 
       // 3. Stars
@@ -60,12 +67,10 @@ const StarBackground: React.FC<StarBackgroundProps> = ({ isSuccess }) => {
         const x = (star.x / 100) * canvas.width;
         const y = (star.y / 100) * canvas.height;
         
-        // Twinkle Logic
         const time = Date.now() * 0.001;
         const twinkle = (Math.sin(time * star.twinkleSpeed * 50 + star.phase) + 1) / 2;
-        const opacity = 0.3 + twinkle * 0.7;
+        const opacity = 0.2 + twinkle * 0.8;
         
-        // Success effect: make stars much brighter and larger
         const scale = isSuccess ? 2.5 : 1.0;
         const finalOpacity = isSuccess ? Math.min(1, opacity * 1.5) : opacity;
 
@@ -74,9 +79,9 @@ const StarBackground: React.FC<StarBackgroundProps> = ({ isSuccess }) => {
         ctx.fillStyle = star.color;
         ctx.globalAlpha = finalOpacity;
         
-        if (isSuccess || star.size > 1.2) {
-          ctx.shadowBlur = isSuccess ? 15 : 5;
-          ctx.shadowColor = 'white';
+        if (isSuccess || star.size > 1.3) {
+          ctx.shadowBlur = isSuccess ? 18 : 6;
+          ctx.shadowColor = star.color;
         } else {
           ctx.shadowBlur = 0;
         }

@@ -5,6 +5,7 @@ import { CONSTELLATIONS } from './constants';
 import { GameState, Constellation, RankEntry, StarPoint } from './types';
 import StarBackground from './components/StarBackground';
 import ShootingStar from './components/ShootingStar';
+import { audioEngine } from './audioUtils';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.LOBBY);
@@ -152,6 +153,9 @@ const App: React.FC = () => {
   const toggleStar = (id: number) => {
     if (gameState !== GameState.DRAW) return;
     
+    // 효과음 재생
+    audioEngine.playStarClick();
+
     // 만약 현재 힌트로 활성화된 별을 클릭했다면 힌트 비활성화
     if (id === activeHintId) {
       setActiveHintId(null);
@@ -170,17 +174,16 @@ const App: React.FC = () => {
   const useHint = () => {
     if (hintsUsed >= 3 || hintCooldown > 0 || gameState !== GameState.DRAW) return;
     
-    // 아직 선택하지 않은 정답 별 중 하나를 찾아 힌트로 지정
     const firstUnselected = constellation.stars.find(s => !userStars.includes(s.id));
     
     if (firstUnselected) {
       setActiveHintId(firstUnselected.id);
       setHintsUsed(prev => prev + 1);
       setHintCooldown(30);
+      audioEngine.playStarClick();
     }
   };
 
-  // 힌트 쿨다운 타이머
   useEffect(() => {
     let timer: any;
     if (hintCooldown > 0) {
@@ -199,6 +202,7 @@ const App: React.FC = () => {
     const isSuccess = JSON.stringify(sortedUser) === JSON.stringify(sortedRequired);
 
     if (isSuccess) {
+      audioEngine.playSuccess();
       const duration = (Date.now() - startTime) / 1000;
       const difficultyBonus = constellation.difficulty === 'Hard' ? 2500 : constellation.difficulty === 'Medium' ? 1800 : 1200;
       const timeBonus = Math.max(0, Math.floor(1000 - duration * 15));
@@ -212,6 +216,7 @@ const App: React.FC = () => {
         saveScore(totalScore + roundScore);
       }
     } else {
+      audioEngine.playFailure();
       setGameState(GameState.FAILURE);
       setShowShootingStar(true);
       setTimeout(() => setShowShootingStar(false), 2000);
@@ -220,17 +225,17 @@ const App: React.FC = () => {
   };
 
   const goHome = () => {
-    if (window.confirm("정말로 로비로 돌아갈까요? 모든 게임 진행 상황과 점수가 초기화됩니다.")) {
-      setGameState(GameState.LOBBY);
-      setCurrentLevel(0);
-      setTotalScore(0);
-      setUserStars([]);
-      setWrongClicks(0);
-      setHintsUsed(0);
-      setActiveHintId(null);
-      setHintCooldown(0);
-      setGeminiFeedback("");
-    }
+    // 팝업 없이 즉시 초기화하여 사용자 경험 개선
+    audioEngine.playStarClick(); // 버튼 피드백
+    setGameState(GameState.LOBBY);
+    setCurrentLevel(0);
+    setTotalScore(0);
+    setUserStars([]);
+    setWrongClicks(0);
+    setHintsUsed(0);
+    setActiveHintId(null);
+    setHintCooldown(0);
+    setGeminiFeedback("");
   };
 
   useEffect(() => {
@@ -349,10 +354,10 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3">
                 <button 
                   onClick={goHome}
-                  className="p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all group"
-                  title="로비로 돌아가기 (완전 초기화)"
+                  className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl border border-white/20 transition-all group active:scale-95"
+                  title="로비로 돌아가기 (초기화)"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/50 group-hover:text-blue-300 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/70 group-hover:text-blue-300 transition-colors">
                     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                     <polyline points="9 22 9 12 15 12 15 22"></polyline>
                   </svg>
@@ -360,10 +365,10 @@ const App: React.FC = () => {
                 <button 
                   onClick={prevLevel}
                   disabled={currentLevel === 0}
-                  className={`p-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all group ${currentLevel === 0 ? 'opacity-20 cursor-not-allowed' : ''}`}
+                  className={`p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all group ${currentLevel === 0 ? 'opacity-20 cursor-not-allowed' : 'active:scale-95'}`}
                   title="이전 여행"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/50 group-hover:text-blue-300 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/50 group-hover:text-blue-300 transition-colors">
                     <path d="m15 18-6-6 6-6"></path>
                   </svg>
                 </button>
@@ -450,7 +455,6 @@ const App: React.FC = () => {
 
                 {(gameState === GameState.DRAW ? [...constellation.stars, ...decoys] : constellation.stars).map((star) => {
                   const isSelected = userStars.includes(star.id);
-                  // 현재 활성화된 딱 하나의 힌트 별만 깜빡임
                   const isHinting = activeHintId === star.id;
                   
                   return (
@@ -512,8 +516,9 @@ const App: React.FC = () => {
                     setHintsUsed(0);
                     setActiveHintId(null);
                     setHintCooldown(0);
+                    audioEngine.playStarClick();
                   }} 
-                  className="px-8 py-5 bg-white/5 hover:bg-white/10 rounded-[1.5rem] font-gamja text-xl border border-white/10 transition-all text-white/50"
+                  className="px-8 py-5 bg-white/5 hover:bg-white/10 rounded-[1.5rem] font-gamja text-xl border border-white/10 transition-all text-white/50 active:scale-95"
                 >
                   다시하기
                 </button>
@@ -540,7 +545,7 @@ const App: React.FC = () => {
                 <div className="flex gap-4">
                   <button 
                     onClick={retryLevel} 
-                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 font-gamja text-xl transition-all"
+                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 font-gamja text-xl transition-all active:scale-95"
                   >
                     다시 하기
                   </button>
